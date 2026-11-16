@@ -16,7 +16,7 @@ def mae(true, pred):
 def evaluate(name, y_test, pred, finished_test):
     finishers = mae(y_test[finished_test], pred[finished_test])
     everyone = mae(y_test, pred)
-    print(f"{name} finishers: {finishers:.3f}   all: {everyone:.3f}")
+    print(f"mae evaluation: {name} - finishers: {finishers:.3f} - all: {everyone:.3f}")
 
 def feature_importance(predict, x, y, groups, repeats=5):
     base = mae(y, predict(x))
@@ -27,7 +27,7 @@ def feature_importance(predict, x, y, groups, repeats=5):
 
         for r in range(repeats):
             shuffled = x.copy()
-            # random rearranging
+            # random rearranging of columns
             order = np.random.default_rng(r).permutation(len(x))
             shuffled[cols] = x[cols].values[order]
 
