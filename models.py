@@ -133,7 +133,7 @@ if __name__ == "__main__":
     evaluate("forest", y_test, forest_pred, finished_test)
 
     # gradient boosting model
-    boost = HistGradientBoostingRegressor(max_iter=300, learning_rate=0.05,
+    boost = HistGradientBoostingRegressor(max_iter=300, learning_rate=0.05, early_stopping=True,
                                           min_samples_leaf=20, random_state=42)
     boost.fit(x_train[finished_train], y_train[finished_train])
     boost_pred = pd.Series(boost.predict(x_test), index=x_test.index)
@@ -199,8 +199,8 @@ if __name__ == "__main__":
                            x_test, y_test, finished_test)
     report("forest", finishers, all)
 
-    finishers, all = repeat_scores(lambda s: HistGradientBoostingRegressor(max_iter=300, learning_rate=0.05,
-                                          min_samples_leaf=20, random_state=42),
+    finishers, all = repeat_scores(lambda s: HistGradientBoostingRegressor(max_iter=300, learning_rate=0.05, early_stopping=True,
+                                          min_samples_leaf=20, random_state=s),
                            x_train[finished_train], y_train[finished_train],
                            x_test, y_test, finished_test)
     report("gradient boosting", finishers, all)
