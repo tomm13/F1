@@ -43,6 +43,21 @@ def shap_importance(values, columns, compound_cols):
     shap_df = shap_df.drop(columns=compound_cols)
     return shap_df.abs().mean().sort_values()
 
+def repeat_scores(new_model,  x_train, y_train, x_test, y_test, finished_test):
+    finishers, everyone = [], []
+    # get 5 sets of scores
+    for seed in range(5):
+        model = new_model(seed)
+        model.fit(x_train, y_train)
+        pred = pd.Series(model.predict(x_test), index=y_test.index)
+        finishers.append(mae(y_test[finished_test], pred[finished_test]))
+        everyone.append(mae(y_test, pred))
+    return finishers, everyone
+
+def report(name, finishers, everyone):
+    print(f"{name}: finishers {np.mean(finishers):.3f} ± {np.std(finishers):.3f}"
+          f" | all {np.mean(everyone):.3f} ± {np.std(everyone):.3f}")
+
 if __name__ == "__main__":
     # write_results()
     df = read_snapshots()
@@ -170,3 +185,22 @@ if __name__ == "__main__":
 
     boost_shap = shap.TreeExplainer(boost).shap_values(sample)
     print("Gradient boosting SHAP:\n", shap_importance(boost_shap, sample.columns, compound_cols))
+
+    print("### 5 SEED AVERAGE SCORE ###")
+    finishers, all = repeat_scores(lambda s: MLPRegressor(hidden_layer_sizes=(64, 64), max_iter=500,
+                                                  early_stopping=True, random_state=s),
+                           x_train_scaled, y_train[finished_train],
+                           x_test_scaled, y_test, finished_test)
+    report("ANN", finishers, all)
+
+    finishers, all = repeat_scores(lambda s: RandomForestRegressor(n_estimators=300, min_samples_leaf=20,
+                                                           random_state=s, n_jobs=-1),
+                           x_train[finished_train], y_train[finished_train],
+                           x_test, y_test, finished_test)
+    report("forest", finishers, all)
+
+    finishers, all = repeat_scores(lambda s: HistGradientBoostingRegressor(max_iter=300, learning_rate=0.05,
+                                          min_samples_leaf=20, random_state=42),
+                           x_train[finished_train], y_train[finished_train],
+                           x_test, y_test, finished_test)
+    report("gradient boosting", finishers, all)
