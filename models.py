@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import shap
+import tensorflow as tf
 from sklearn.linear_model import LinearRegression
 
 from data import read_snapshots, keep_useful_cols, build_features, split_by_year
@@ -9,6 +10,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
 
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import HistGradientBoostingRegressor
 
 def mae(true, pred):
     return (true-pred).abs().mean()
@@ -94,7 +96,7 @@ if __name__ == "__main__":
     x_train_scaled = scaler.fit_transform(x_train[finished_train])
     x_test_scaled = scaler.transform(x_test)
 
-    # 2 layers of 64 neurons
+    # artificial neural network model (MLP): 2 layers of 64 neurons
     # 500 passes over training
     # early stopping sotps when accuracy stops improving and prevents overfitting
     # random_state for random initial weights
@@ -106,7 +108,7 @@ if __name__ == "__main__":
 
     evaluate("ANN", y_test, ann_pred, finished_test)
 
-    # 300 trees
+    # random forest model: 300 trees
     # each final leaf must have at lesat 20 drivers to prevent memorising
     forest = RandomForestRegressor(n_estimators=300, min_samples_leaf=20,
                                    random_state=42, n_jobs=-1)
@@ -114,6 +116,13 @@ if __name__ == "__main__":
     forest.fit(x_train[finished_train], y_train[finished_train])
     forest_pred = pd.Series(forest.predict(x_test), index=x_test.index)
     evaluate("forest", y_test, forest_pred, finished_test)
+
+    # gradient boosting model
+    boost = HistGradientBoostingRegressor(max_iter=300, learning_rate=0.05,
+                                          min_samples_leaf=20, random_state=42)
+    boost.fit(x_train[finished_train], y_train[finished_train])
+    boost_pred = pd.Series(boost.predict(x_test), index=x_test.index)
+    evaluate("gradient boosting", y_test, boost_pred, finished_test)
 
     # for each compound
     compound_cols = [c for c in x.columns if c.startswith("compound_")]
@@ -132,11 +141,15 @@ if __name__ == "__main__":
     ann_imp = feature_importance(lambda d: ann.predict(scaler.transform(d)),
                                  test_finishers, y_finishers, groups)
     forest_imp = feature_importance(forest.predict, test_finishers, y_finishers, groups)
+    boost_imp = feature_importance(boost.predict, test_finishers, y_finishers, groups)
+
     print("Linear:\n", linear_imp)
     print()
     print("ANN:\n", ann_imp)
     print()
     print("Forest:\n", forest_imp)
+    print()
+    print("Gradient boosting:\n", boost_imp)
 
     print("### SHAP IMPORTANCE ###")
     sample = test_finishers.sample(500, random_state=42)
@@ -148,9 +161,12 @@ if __name__ == "__main__":
     # only explain the first 200 rows
     background = shap.sample(x_train[finished_train], 100, random_state=42)
     ann_explainer = shap.KernelExplainer(lambda d: ann.predict(scaler.transform(pd.DataFrame(d, columns=x_train.columns))), background)
-    ann_shap = ann_explainer.shap_values(sample.iloc[:200], nsamples=200)
+    ann_shap = ann_explainer.shap_values(sample.iloc[:300], nsamples=300)
 
     print("ANN SHAP:\n", shap_importance(ann_shap, sample.columns, compound_cols))
     print()
     forest_shap = shap.TreeExplainer(forest).shap_values(sample)
     print("Forest SHAP:\n", shap_importance(forest_shap, sample.columns, compound_cols))
+
+    boost_shap = shap.TreeExplainer(boost).shap_values(sample)
+    print("Gradient boosting SHAP:\n", shap_importance(boost_shap, sample.columns, compound_cols))
